@@ -1,0 +1,2 @@
+- add redirect parameter to send all replicas to a new instance
+- add shutdown parameter to send all replicas to a new instance
