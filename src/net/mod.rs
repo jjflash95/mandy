@@ -4,9 +4,11 @@ pub mod tests;
 pub(crate) use std::net::SocketAddr;
 pub use tokio::net::TcpStream;
 
-use crate::{
-    command::{Command, CommandKind}, log_enabled, mirror::{init_sync_routine, NodeRef}, rsmp::{self, Rsmp}, store::{SharedStore, Storage}, trace
-};
+use crate::command::Command;
+use crate::mirror::NodeRef;
+use crate::rsmp::Rsmp;
+use crate::store::{SharedStore, Storage};
+use crate::{log_enabled, trace};
 
 use futures::{lock::Mutex, Future};
 use log::{error, info};
@@ -27,7 +29,6 @@ use tokio::{
 };
 use uuid::Uuid;
 
-pub static DEFAULT_NODE_ADDR_STR: &str = "127.0.0.1:6111";
 pub static DEFAULT_SHUTDOWN_SLEEP_MS: usize = 5000;
 
 static MAX_DBG_MESSAGE_LEN: usize = 1023;
@@ -35,7 +36,6 @@ static COMMAND_MAX_RETRIES: usize = 3;
 static PROMOTE_TIMEOUT_MS: u64 = 10_000;
 static NO_COMMANDS_SLEEP_MS: u64 = 10;
 static DEFAULT_CMD_BUFFER_MAX_CAPACITY: usize = 100;
-
 
 pub type Port = u16;
 
@@ -144,7 +144,7 @@ impl SharedNode {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Mode {
     Orphan,
-    Child(Uuid, SocketAddr)
+    Child(Uuid, SocketAddr),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -261,11 +261,7 @@ impl CommandBuffer {
     }
 
     pub async fn supports_partial_sync(&self, since: TimeStampMillis) -> bool {
-        self.inner
-            .read()
-            .await
-            .iter()
-            .any(|(ts, _)| ts <= &since)
+        self.inner.read().await.iter().any(|(ts, _)| ts <= &since)
     }
 
     pub async fn clone_since(
@@ -279,12 +275,6 @@ impl CommandBuffer {
             .filter(|(ts, _)| ts >= &since)
             .cloned()
             .collect()
-    }
-}
-
-impl std::default::Default for Node {
-    fn default() -> Self {
-        Self::new(Uuid::new_v4(), InstanceRole::Master, DEFAULT_NODE_ADDR_STR.parse().unwrap())
     }
 }
 
@@ -478,7 +468,7 @@ impl Display for Mode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Mode::Orphan => "ORPHAN".to_string(),
-            Mode::Child(uuid, addr) => format!("CHILD OF ({uuid}, {addr})")
+            Mode::Child(uuid, addr) => format!("CHILD OF ({uuid}, {addr})"),
         };
         write!(f, "{s}")
     }
@@ -512,6 +502,8 @@ where
     S: AsyncStream,
     Store: Storage,
 {
+    use crate::command::CommandKind::*;
+
     async fn send_promote_ext<S: AsyncStream>(
         conn: &mut Connection<S>,
         buf: &[u8],
@@ -531,7 +523,7 @@ where
         let msg = Rsmp::parse_bytes(&response)
             .map_err(|e| format!("Failed to parse remote response: {:?}", e))?;
 
-        if !rsmp::is_ack(&msg) {
+        if !crate::rsmp::is_ack(&msg) {
             return Err(format!("Remote didn't ACK: {:?}", msg));
         }
         Ok(())
@@ -585,14 +577,14 @@ where
                 }
 
                 match command.kind {
-                    CommandKind::Write => {
+                    Write => {
                         if let Err(e) = conn.write(&Rsmp::from(&command).to_bytes()).await {
                             // If a command fails we push it back to the front of the queue
                             error!(target: &target, "Failed to propagate command: {e}");
                             consumer.lock().await.push_front((attempts + 1, command));
                         }
                     }
-                    CommandKind::Promote => {
+                    Promote => {
                         // {ptx:promotion_transmitter} failing to send is an irrecoverable error, we would
                         // have 2 instances working as master
                         // Also. this task is supposed to update the role and dispatch
@@ -608,14 +600,17 @@ where
                         lock.rm_replica(packet.uuid).await;
                         drop(lock);
 
-                        init_sync_routine(conn, node.clone(), store);
+                        crate::mirror::init_sync_routine(conn, node.clone(), store);
                         return;
                     }
-                    CommandKind::Shutdown => {
-                        let _ = conn.write(&[]).await.inspect_err(|_| error!("Remote shutdown failed"));
+                    Shutdown => {
+                        let _ = conn
+                            .write(&[])
+                            .await
+                            .inspect_err(|_| error!("Remote shutdown failed"));
                         return;
                     }
-                    CommandKind::Redirect => todo!(),
+                    Redirect => todo!(),
                     _ => unreachable!(),
                 };
             }

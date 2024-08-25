@@ -605,7 +605,7 @@ mod tests {
         type Input = u8;
         type Output = u8;
 
-        fn write(&mut self, query: Vec<u8>) -> Result<u8, store::Error> {
+        fn write(&mut self, query: Vec<Self::Input>) -> Result<Self::Output, store::Error> {
             for n in &query {
                 self.inner.push(*n)
             }
@@ -618,7 +618,7 @@ mod tests {
         type Input = u8;
         type Output = u8;
 
-        fn read(&self, query: Vec<u8>) -> Result<u8, store::Error> {
+        fn read(&self, query: Vec<Self::Input>) -> Result<Self::Output, store::Error> {
             Ok(query[0])
         }
     }

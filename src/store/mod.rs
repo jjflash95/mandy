@@ -1,14 +1,13 @@
 //! Traits for data persistence and serialize/deserialize ops
 
 pub use bytes::Bytes;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 #[cfg(feature = "json")]
 pub mod json;
 
 pub type SharedStore<Store> = Arc<RwLock<Store>>;
-
 
 /// General client facing error for Write, Read, Serialize and Initialize operations
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -444,7 +443,7 @@ where
 #[cfg(not(feature = "json"))]
 impl<T> Output for T
 where
-    T: Display + Send + Sync + 'static,
+    T: ToString + Send + Sync + 'static,
 {
     fn into_bytes(self) -> Vec<u8> {
         T::to_string(&self).into_bytes()
@@ -452,7 +451,7 @@ where
 }
 
 impl Error {
-    pub fn new<T: Display>(e: T) -> Self {
+    pub fn new<T: ToString>(e: T) -> Self {
         Self(e.to_string())
     }
 
@@ -461,7 +460,7 @@ impl Error {
     }
 }
 
-impl<T: Display> From<T> for Error {
+impl<T: ToString> From<T> for Error {
     fn from(c: T) -> Error {
         Self::new(c.to_string())
     }

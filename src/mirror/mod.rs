@@ -6,15 +6,13 @@ mod tests;
 
 use bytes::Bytes;
 use thiserror::Error;
-use tokio::select;
 use uuid::Uuid;
 
-use crate::command::{Command, CommandKind::*};
 use crate::mirror::helpers::ParameterArray;
 use crate::net::{
     AsyncStream, Connection, InstanceRole, Mode, Node, SharedNode, SyncedConnectionPacket,
 };
-use crate::rsmp::{ParseError, Rsmp, ACK};
+use crate::rsmp::{ParseError, Rsmp};
 use crate::store::{self, SharedStore, Storage};
 use crate::{debug, error, info, log_enabled, trace, warn};
 use SyncSignal::*;
@@ -419,7 +417,7 @@ where
         let listener = TcpListener::bind(node.addr().await).await?;
         node.set_shutdown(sender).await;
 
-        select! {
+        tokio::select! {
             _ = shutdown => (),
             _ = self.serve_inner(listener) => (),
         }
@@ -488,6 +486,9 @@ where
     Stream: AsyncStream,
     Store: Storage,
 {
+    use crate::command::Command;
+    use crate::command::CommandKind::*;
+
     let mut buf = [0; 512];
     match conn.read(&mut buf).await {
         Ok(0) => return Ok(Dropped),
@@ -511,7 +512,7 @@ where
             let ip = conn.addy()?.ip();
             let uuid = cmd.args().deserialize(0, "UUID")?;
             let port = cmd.args().deserialize(1, "PORT")?;
-            conn.write(&ACK.to_bytes()).await?;
+            conn.write(&crate::rsmp::ACK.to_bytes()).await?;
             actions::sync_promote(cmd.args(), node, store).await;
             Ok(Promoted(uuid, (ip, port).into()))
         }
@@ -594,6 +595,9 @@ where
     Stream: AsyncStream,
     Store: Storage,
 {
+    use crate::command::Command;
+    use crate::command::CommandKind::*;
+
     let mut buf = [0; 512];
     if let 0 = conn.read(&mut buf).await? {
         return Err(HandleError::Io("Connection closed unexpectedly".into()));

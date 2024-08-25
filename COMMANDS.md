@@ -25,8 +25,8 @@
     > - instance keeps replicating commands sent from target
     - [x] **SUBSCRIBE** `uuid` `port`
     > Sends current storage state to incoming connection, saves it and sends all further mutations
-    > `When a replica server first starts, it attemps to subscribe to its designated parent instance, getting the full state of the storage an saving the current connection to process incoming mutations`
-    > - instance receives SUBSCRIBE `uuid` `port`
+    > `When a replica server first starts, it attemps to subscribe to its designated parent instance, getting the full state of the storage an saving the current connection to process incoming mutations`. If a timestamp is present we attempt to execute a partial sync if possible.
+    > - instance receives SUBSCRIBE `uuid` `port` `[timestamp]`
     > - instance parses uuid, port and serializes storage into bytes
     > - instance `ACK`s the subscriber
     > - subscriber `ACK`s instance
